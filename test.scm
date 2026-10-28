@@ -3,6 +3,9 @@
 
 (display "model: ") (display (iris-model-info)) (newline)
 
+(display "tokens: ") (display (iris-encode-text "a red apple")) (newline)
+(display "tokens: ") (display (iris-encode-text "a red apple on a wooden table")) (newline)
+
 (iris-generate "a red apple" 128 128 1 42)
 (display "info:  ") (display (iris-image-info)) (newline)
 (iris-save "out/test-a.png")

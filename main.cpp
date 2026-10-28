@@ -15,7 +15,6 @@ int main(int argc, char **argv)
     std::fprintf(stderr, "failed to load model: %s\n", session.error().c_str());
     return 2;
   }
-  std::fprintf(stderr, "model: %s\n", session.model_info().c_str());
 
   std::string err = session.run_file(argv[2]);
   if (!err.empty()) {

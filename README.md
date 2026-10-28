@@ -40,6 +40,7 @@ mkdir -p out
 ```scheme
 (iris-model-info)                          ; => model description
 (iris-generate prompt [width height steps seed])  ; => #t
+(iris-encode-text prompt)                  ; => token count
 (iris-image-info)                          ; => #(width height channels)
 (iris-save path)                           ; => #t
 ```

@@ -28,34 +28,50 @@ static ValueT iris_scm_stub_model_info(VM *vm)
 
 static ValueT iris_scm_stub_generate(VM *vm, ValueT *prompt, ValueT *rest)
 {
-  iris_params p = IRIS_PARAMS_DEFAULT;
   int n = 0;
   const char *text = scm_get_string(vm, prompt, &n);
 
   /*
    * Optional args are positional: [width height steps seed]. A missing arg
    * means every later one is missing too, so one cursor over the packed
-   * rest list is enough.
+   * rest list is enough. If no extra args are given, pass NULL to iris_generate
+   * so it uses its own defaults.
    */
-  ValueT *argv = rest;
-  auto take_int = [&](auto &field) {
-    if (!scm_is_pair(vm, argv))
-      return;
-    using T = std::remove_cvref_t<decltype(field)>;
-    field = static_cast<T>(scm_get_int(vm, scm_car(vm, argv)));
-    argv = scm_cdr(vm, argv);
-  };
-  take_int(p.width);
-  take_int(p.height);
-  take_int(p.num_steps);
-  take_int(p.seed);
+  iris_params p = IRIS_PARAMS_DEFAULT;
+  const iris_params *p_ptr = NULL;
+  if (scm_is_pair(vm, rest)) {
+    p_ptr = &p;
+    ValueT *argv = rest;
+    auto take_int = [&](auto &field) {
+      if (!scm_is_pair(vm, argv))
+        return;
+      using T = std::remove_cvref_t<decltype(field)>;
+      field = static_cast<T>(scm_get_int(vm, scm_car(vm, argv)));
+      argv = scm_cdr(vm, argv);
+    };
+    take_int(p.width);
+    take_int(p.height);
+    take_int(p.num_steps);
+    take_int(p.seed);
+  }
 
-  iris_image *img = iris_generate(session_of(vm)->ctx(), text, &p);
+  iris_image *img = iris_generate(session_of(vm)->ctx(), text, p_ptr);
   if (!img)
     scm_error(vm, "iris-generate: %s", iris_get_error());
 
   session_of(vm)->adopt(img);
   return scm_make_bool(vm, true);
+}
+
+static ValueT iris_scm_stub_encode_text(VM *vm, ValueT *prompt)
+{
+  int n = 0;
+  const char *text = scm_get_string(vm, prompt, &n);
+  int seq = 0;
+  const float *emb = iris_encode_text(session_of(vm)->ctx(), text, &seq);
+  if (!emb)
+    scm_error(vm, "iris-encode-text: %s", iris_get_error());
+  return scm_make_int(vm, seq);
 }
 
 static ValueT iris_scm_stub_image_info(VM *vm)
@@ -120,6 +136,7 @@ void Session::init()
   static const RegCProc lib[] = {
     RegCProc("iris-model-info", iris_scm_stub_model_info),
     RegCProc("iris-generate",   iris_scm_stub_generate, true),  /* 1 fixed arg + rest */
+    RegCProc("iris-encode-text", iris_scm_stub_encode_text),
     RegCProc("iris-image-info", iris_scm_stub_image_info),
     RegCProc("iris-save",       iris_scm_stub_save),
     RegCProc(nullptr, -1)
