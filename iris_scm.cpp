@@ -39,38 +39,67 @@ static ValueT iris_scm_stub_model_info(VM *vm)
   return scm_make_string(vm, s ? s : "?");
 }
 
+/*
+ * Optional args are positional: [width height steps seed]. A missing arg means
+ * every later one is missing too, so one cursor over the packed rest list is
+ * enough. Returns NULL when nothing was given, so iris.c applies its defaults.
+ */
+static const iris_params *parse_params(VM *vm, ValueT *rest, iris_params *p)
+{
+  *p = IRIS_PARAMS_DEFAULT;
+  if (!scm_is_pair(vm, rest))
+    return nullptr;
+
+  ValueT *argv = rest;
+  auto take_int = [&](auto &field) {
+    if (!scm_is_pair(vm, argv))
+      return;
+    using T = std::remove_cvref_t<decltype(field)>;
+    field = static_cast<T>(scm_get_int(vm, scm_car(vm, argv)));
+    argv = scm_cdr(vm, argv);
+  };
+  take_int(p->width);
+  take_int(p->height);
+  take_int(p->num_steps);
+  take_int(p->seed);
+  return p;
+}
+
 static ValueT iris_scm_stub_generate(VM *vm, ValueT *prompt, ValueT *rest)
 {
   int n = 0;
   const char *text = scm_get_string(vm, prompt, &n);
 
-  /*
-   * Optional args are positional: [width height steps seed]. A missing arg
-   * means every later one is missing too, so one cursor over the packed
-   * rest list is enough. If no extra args are given, pass NULL to iris_generate
-   * so it uses its own defaults.
-   */
-  iris_params p = IRIS_PARAMS_DEFAULT;
-  const iris_params *p_ptr = NULL;
-  if (scm_is_pair(vm, rest)) {
-    p_ptr = &p;
-    ValueT *argv = rest;
-    auto take_int = [&](auto &field) {
-      if (!scm_is_pair(vm, argv))
-        return;
-      using T = std::remove_cvref_t<decltype(field)>;
-      field = static_cast<T>(scm_get_int(vm, scm_car(vm, argv)));
-      argv = scm_cdr(vm, argv);
-    };
-    take_int(p.width);
-    take_int(p.height);
-    take_int(p.num_steps);
-    take_int(p.seed);
-  }
+  iris_params p;
+  const iris_params *p_ptr = parse_params(vm, rest, &p);
 
   iris_image *img = iris_generate(session_of(vm)->ctx(), text, p_ptr);
   if (!img)
     scm_error(vm, "iris-generate: %s", iris_get_error());
+
+  session_of(vm)->adopt(img);
+  return scm_make_bool(vm, true);
+}
+
+/* Source image drives the output; it is local to this call and freed at once */
+static ValueT iris_scm_stub_img2img(VM *vm, ValueT *path, ValueT *prompt,
+                                    ValueT *rest)
+{
+  int n = 0;
+  const char *file = scm_get_string(vm, path, &n);
+  const char *text = scm_get_string(vm, prompt, &n);
+
+  iris_params p;
+  const iris_params *p_ptr = parse_params(vm, rest, &p);
+
+  iris_image *src = iris_image_load(file);
+  if (!src)
+    scm_error(vm, "iris-img2img: cannot load %s", file);
+
+  iris_image *img = iris_img2img(session_of(vm)->ctx(), text, src, p_ptr);
+  iris_image_free(src);
+  if (!img)
+    scm_error(vm, "iris-img2img: %s", iris_get_error());
 
   session_of(vm)->adopt(img);
   return scm_make_bool(vm, true);
@@ -158,6 +187,7 @@ void Session::init()
   static const RegCProc lib[] = {
     RegCProc("iris-model-info", iris_scm_stub_model_info),
     RegCProc("iris-generate",   iris_scm_stub_generate, true),  /* 1 fixed arg + rest */
+    RegCProc("iris-img2img",    iris_scm_stub_img2img, true),   /* 2 fixed args + rest */
     RegCProc("iris-encode-text", iris_scm_stub_encode_text),
     RegCProc("iris-image-info", iris_scm_stub_image_info),
     RegCProc("iris-save",       iris_scm_stub_save),

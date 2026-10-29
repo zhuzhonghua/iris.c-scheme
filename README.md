@@ -39,6 +39,7 @@ are accepted here as well (`auto` picks the backend for the current platform).
 ```scheme
 (iris-model-info)                          ; => model description
 (iris-generate prompt [width height steps seed])  ; => #t
+(iris-img2img path prompt [width height steps seed])  ; => #t, source image is freed
 (iris-encode-text prompt)                  ; => token count
 (iris-image-info)                          ; => #(width height channels)
 (iris-save path)                           ; => #t
