@@ -8,12 +8,18 @@
 
 (iris-generate "a red apple" 128 128 1 42)
 (display "info:  ") (display (iris-image-info)) (newline)
-(iris-save "out/test-a.png")
-(display "saved: out/test-a.png") (newline)
+(iris-save "test-a.png")
+(display "saved: test-a.png") (newline)
 
 (iris-generate "a blue cup" 128 128 1 7)
 (display "info:  ") (display (iris-image-info)) (newline)
-(iris-save "out/test-b.png")
-(display "saved: out/test-b.png") (newline)
+(iris-save "test-b.png")
+(display "saved: test-b.png") (newline)
+
+;; 4 steps -> iris.c skips the last one, so step-1..3-of-4.png are written
+(iris-step-save #t)
+(iris-generate "a red apple" 128 128 4 42)
+(display "steps: step-1..3-of-4.png") (newline)
+(iris-step-save #f)
 
 (display "OK") (newline)

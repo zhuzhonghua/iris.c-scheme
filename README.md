@@ -31,7 +31,6 @@ are accepted here as well (`auto` picks the backend for the current platform).
 # 16 GB, downloaded once by the iris.c script
 (cd iris.c && ./download_model.sh 4b)
 
-mkdir -p out
 ./build/iris-scm ./iris.c/flux-klein-4b test.scm
 ```
 
@@ -43,4 +42,12 @@ mkdir -p out
 (iris-encode-text prompt)                  ; => token count
 (iris-image-info)                          ; => #(width height channels)
 (iris-save path)                           ; => #t
+(iris-step-save on)                        ; dump every denoising step, #f disables
 ```
+
+`iris-step-save` writes `step-N-of-TOTAL.png` into the working directory for
+each intermediate latent. With `steps` = 4 you get 3 files: iris.c decodes
+steps 1..3 only, since the final latent is decoded once more at the end. The
+intermediate image is freed by iris.c right after the callback returns, so it is
+saved synchronously and never kept.
+

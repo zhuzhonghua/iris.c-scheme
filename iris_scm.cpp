@@ -12,6 +12,19 @@ namespace iris_scm {
 /* Registry key holding Session* (as lightuserdata); each VM has its own */
 static constexpr const char *kSessionKey = "~iris-scm-session";
 
+/*
+ * Step images. iris.c only fires the callback while it is registered, so
+ * registering / unregistering it is the switch and no extra state is needed.
+ * The image is freed by iris_sample.c right after the callback returns, so it
+ * must be saved here synchronously and never be retained.
+ */
+static void step_image_trampoline(int step, int total, const iris_image *img)
+{
+  std::string path = "step-" + std::to_string(step) + "-of-" +
+                     std::to_string(total) + ".png";
+  iris_image_save(img, path.c_str());
+}
+
 /* ===== File-level host functions (RegCProc takes bare function pointers) ===== */
 
 static Session *session_of(VM *vm)
@@ -101,6 +114,13 @@ static ValueT iris_scm_stub_save(VM *vm, ValueT *path)
   return scm_make_bool(vm, true);
 }
 
+static ValueT iris_scm_stub_step_save(VM *vm, ValueT *on)
+{
+  iris_set_step_image_callback(session_of(vm)->ctx(),
+    scm_is_true(vm, on) ? step_image_trampoline : nullptr);
+  return scm_make_bool(vm, true);
+}
+
 /* ===== Session ===== */
 
 Session::Session(const std::string &model_dir)
@@ -121,8 +141,10 @@ Session::~Session()
     iris_image_free(current_);
   if (vm_)
     scm_destroy_vm(vm_);
-  if (ctx_)
+  if (ctx_) {
+    iris_set_step_image_callback(ctx_, nullptr);  /* clear iris.c's globals */
     iris_free(ctx_);
+  }
 }
 
 void Session::init()
@@ -139,6 +161,7 @@ void Session::init()
     RegCProc("iris-encode-text", iris_scm_stub_encode_text),
     RegCProc("iris-image-info", iris_scm_stub_image_info),
     RegCProc("iris-save",       iris_scm_stub_save),
+    RegCProc("iris-step-save",  iris_scm_stub_step_save),
     RegCProc(nullptr, -1)
   };
 
