@@ -40,6 +40,7 @@ are accepted here as well (`auto` picks the backend for the current platform).
 (iris-model-info)                          ; => model description
 (iris-generate prompt [width height steps seed])  ; => #t
 (iris-img2img path prompt [width height steps seed])  ; => #t, source image is freed
+(iris-multiref prompt ref... [width height steps seed])  ; => #t, up to 4 refs
 (iris-encode-text prompt)                  ; => token count
 (iris-image-info)                          ; => #(width height channels)
 (iris-save path)                           ; => #t

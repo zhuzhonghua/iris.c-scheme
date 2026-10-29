@@ -3,7 +3,9 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <string>
 #include <type_traits>
+#include <vector>
 
 using namespace Scheme;
 
@@ -105,6 +107,44 @@ static ValueT iris_scm_stub_img2img(VM *vm, ValueT *path, ValueT *prompt,
   return scm_make_bool(vm, true);
 }
 
+/*
+ * Leading string args are reference images, the remaining tail is
+ * [width height steps seed]. Loaded refs are borrowed by iris.c and freed here.
+ */
+static ValueT iris_scm_stub_multiref(VM *vm, ValueT *prompt, ValueT *rest)
+{
+  int n = 0;
+  const char *text = scm_get_string(vm, prompt, &n);
+
+  std::vector<iris_image *> refs;
+  ValueT *argv = rest;
+  while (scm_is_pair(vm, argv) && scm_is_string(vm, scm_car(vm, argv))) {
+    const char *file = scm_get_string(vm, scm_car(vm, argv), &n);
+    iris_image *ref = iris_image_load(file);
+    if (!ref) {
+      for (iris_image *r : refs)
+        iris_image_free(r);
+      scm_error(vm, "iris-multiref: cannot load %s", file);
+    }
+    refs.push_back(ref);
+    argv = scm_cdr(vm, argv);
+  }
+
+  iris_params p;
+  const iris_params *p_ptr = parse_params(vm, argv, &p);
+
+  std::vector<const iris_image *> cref(refs.begin(), refs.end());
+  iris_image *img = iris_multiref(session_of(vm)->ctx(), text, cref.data(),
+                                  static_cast<int>(cref.size()), p_ptr);
+  for (iris_image *r : refs)
+    iris_image_free(r);
+  if (!img)
+    scm_error(vm, "iris-multiref: %s", iris_get_error());
+
+  session_of(vm)->adopt(img);
+  return scm_make_bool(vm, true);
+}
+
 static ValueT iris_scm_stub_encode_text(VM *vm, ValueT *prompt)
 {
   int n = 0;
@@ -188,6 +228,7 @@ void Session::init()
     RegCProc("iris-model-info", iris_scm_stub_model_info),
     RegCProc("iris-generate",   iris_scm_stub_generate, true),  /* 1 fixed arg + rest */
     RegCProc("iris-img2img",    iris_scm_stub_img2img, true),   /* 2 fixed args + rest */
+    RegCProc("iris-multiref",   iris_scm_stub_multiref, true),  /* 1 fixed arg + rest */
     RegCProc("iris-encode-text", iris_scm_stub_encode_text),
     RegCProc("iris-image-info", iris_scm_stub_image_info),
     RegCProc("iris-save",       iris_scm_stub_save),
